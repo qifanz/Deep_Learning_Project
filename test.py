@@ -7,7 +7,7 @@ from Network import *
 from multiagent.environment import MultiAgentEnv
 
 
-def t(beta_pl, beta_op, n_episodes=10000, display=False):
+def test(beta_pl, beta_op, n_episodes=10000, display=False):
     env = make_env()
     net = Network(14, 16)
     target_net = Network(14, 16)
@@ -46,9 +46,3 @@ def make_env(env_name='love_chase'):
     env.discrete_action_input = True
     return env
 
-
-#for beta_pl in [20, 10]:
- #   for beta_op in [-20, -10, -5]:
-  #      print('beta_pl', beta_pl, 'beta_op', beta_op)
-   #     t(beta_pl, beta_op)
-t(20,-20,display=True)

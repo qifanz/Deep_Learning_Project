@@ -9,7 +9,7 @@ from ReplayBuffer import ReplayBuffer
 from multiagent.environment import MultiAgentEnv
 
 
-def train():
+def train(beta_pl, beta_op):
     print('Start training...')
     replay_buffer = ReplayBuffer(replay_buffer_size)
     env = make_env()
@@ -19,7 +19,7 @@ def train():
         net = net.cuda()
         target_net = target_net.cuda()
 
-    players = Agent(0, 10, -5 , net, target_net,replay_buffer)
+    players = Agent(0, beta_pl, beta_op , net, target_net,replay_buffer)
     rewards_list = []
     bellman_errors_list = []
 
@@ -81,4 +81,4 @@ def make_env(env_name='love_chase'):
     env.discrete_action_input = True
     return env
 
-train()
+
