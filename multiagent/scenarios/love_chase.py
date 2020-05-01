@@ -45,7 +45,7 @@ class Scenario(BaseScenario):
             landmark.color = np.array([0.25, 0.25, 0.25])
         # set random initial states
         for agent in world.agents:
-            agent.state.p_pos = np.random.uniform(-1, +1, world.dim_p)
+            agent.state.p_pos = np.random.uniform(-0.5, +0.5, world.dim_p)
             agent.state.p_vel = np.zeros(world.dim_p)
             agent.state.c = np.zeros(world.dim_c)
         for i, landmark in enumerate(world.landmarks):
@@ -94,15 +94,15 @@ class Scenario(BaseScenario):
         if agent.collide:
             for a in adversaries:
                 if self.is_collision(a, agent):
-                    rew -= 2
+                    rew -= 1
 
         # agents are penalized for exiting the screen, so that they can be caught by the adversaries
         def bound(x):
             if x < 0.9:
                 return 0
             if x < 1.0:
-                return (x - 0.9) * 10
-            return min(np.exp(2 * x - 2), 10)
+                return (x - 0.9) * 5
+            return min(np.exp(2 * x - 2), 5)
 
         for p in range(world.dim_p):
             x = abs(agent.state.p_pos[p])

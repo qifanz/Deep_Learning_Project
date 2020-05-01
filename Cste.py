@@ -1,10 +1,12 @@
-num_episodes = 500000
+num_episodes = 50000
 max_steps_episode = 30
 display_env = False
-target_update = 3000
+target_update = 2000
 epsilon_greedy = 0.2
 save_frequency = 5000
 data_dir = 'data/'
 print_frequency = 1000
 mode = 'training' #
 device = 'cpu'
+replay_buffer_size = 500
+batch_size = 8

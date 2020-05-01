@@ -5,27 +5,31 @@ import multiagent.scenarios as scenarios
 from Agent import Agent
 from Cste import *
 from Network import *
+from ReplayBuffer import ReplayBuffer
 from multiagent.environment import MultiAgentEnv
 
 
 def train():
     print('Start training...')
+    replay_buffer = ReplayBuffer(replay_buffer_size)
     env = make_env()
     net = Network(14, 16)
     target_net = Network(14, 16)
-    if device == 'gpu':
+    if device == 'cuda':
         net = net.cuda()
         target_net = target_net.cuda()
 
-    players = Agent(0, 20, -20, net, target_net)
-    rewards = []
-    bellman_errors = []
+    players = Agent(0, 10, -5 , net, target_net,replay_buffer)
+    rewards_list = []
+    bellman_errors_list = []
 
     sum_cumulative_reward = 0
     sum_cumulative_error = 0
 
     for i in range(num_episodes):
-        ob = env.reset()[0]
+        ob = env.reset()
+        ob = torch.unsqueeze(torch.tensor(ob[0], device=device), 0)
+
         cumulative_reward = 0
         cumulative_error = 0
         for step in range(max_steps_episode):
@@ -33,19 +37,21 @@ def train():
                 env.render('1')
                 time.sleep(0.1)
 
-            previous_ob = ob.copy()
-            actions = players.choose_action(ob)
-            ob, rewards, done_n, info = env.step(actions)
-            ob = ob[0]
+            previous_ob = ob.clone().detach()
+            action_pl, action_op, action_tensor = players.choose_action(ob)
+            ob, rewards, done_n, info = env.step([action_pl, action_op])
+            ob = torch.unsqueeze(torch.tensor(ob[0], device=device), 0)
             reward = -rewards[1]
             # print(reward)
             cumulative_reward += reward
-            error = players.update(previous_ob, reward, actions, ob)
-            cumulative_error += error
+            #error = players.update(previous_ob, reward, actions, ob)
             if all(done_n): break
+            replay_buffer.push(previous_ob, reward, action_tensor, ob)
+            error = players.optimize()
+            cumulative_error += error
 
-        rewards.append(cumulative_reward)
-        bellman_errors.append(cumulative_error)
+        rewards_list.append(cumulative_reward)
+        bellman_errors_list.append(cumulative_error)
         sum_cumulative_reward += cumulative_reward
         sum_cumulative_error += cumulative_error
 
@@ -60,11 +66,12 @@ def train():
             torch.save(net.state_dict(), net_weights_path)
             torch.save(target_net.state_dict(), target_weights_path)
             f = open('data/rewards.pkl', 'wb')
-            pickle.dump(rewards, f)
+            pickle.dump(rewards_list, f)
             f.close()
             f = open('data/errors.pkl', 'wb')
-            pickle.dump(bellman_errors, f)
+            pickle.dump(bellman_errors_list, f)
             f.close()
+
 
 
 def make_env(env_name='love_chase'):
@@ -73,6 +80,5 @@ def make_env(env_name='love_chase'):
     env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation)
     env.discrete_action_input = True
     return env
-
 
 train()

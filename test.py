@@ -6,33 +6,37 @@ from Cste import *
 from Network import *
 from multiagent.environment import MultiAgentEnv
 
-def t():
+
+def t(beta_pl, beta_op, n_episodes=10000, display=False):
     env = make_env()
     net = Network(14, 16)
     target_net = Network(14, 16)
-    net.load_state_dict(torch.load('data/net_100000'))
-    target_net.load_state_dict(torch.load('data/target_100000'))
-    players = Agent(0, 20, -20, net, target_net)
-    rewards = []
-    for i in range(num_episodes):
-        ob = env.reset()[0]
+    net.load_state_dict(torch.load('data/' + str(beta_pl) + '_' + str(beta_op) + '/net_45000'))
+    target_net.load_state_dict(torch.load('data/' + str(beta_pl) + '_' + str(beta_op) + '/target_45000'))
+    players = Agent(0, beta_pl, beta_op, net, target_net, None, epsilon=0)
+    rewards = 0
+    for i in range(n_episodes):
+        ob = env.reset()
+        ob = torch.unsqueeze(torch.tensor(ob[0], device=device), 0)
+
         cumulative_reward = 0
         for step in range(max_steps_episode):
-            env.render('1')
-            time.sleep(0.1)
+            if display:
+                env.render('1')
+                time.sleep(0.1)
 
             actions = players.choose_action(ob)
             ob, reward, done_n, info = env.step(actions)
-            ob = ob[0]
+            ob = torch.unsqueeze(torch.tensor(ob[0], device=device), 0)
+
             reward = -reward[1]
             cumulative_reward += reward
 
             if all(done_n): break
 
-        rewards.append(cumulative_reward)
+        rewards += cumulative_reward
 
-        if i % 1 == 0:
-            print('episode ', i, cumulative_reward)
+    print('average reward', rewards / n_episodes)
 
 
 def make_env(env_name='love_chase'):
@@ -43,4 +47,8 @@ def make_env(env_name='love_chase'):
     return env
 
 
-t()
+#for beta_pl in [20, 10]:
+ #   for beta_op in [-20, -10, -5]:
+  #      print('beta_pl', beta_pl, 'beta_op', beta_op)
+   #     t(beta_pl, beta_op)
+t(20,-20,display=True)

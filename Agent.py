@@ -4,9 +4,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 from Cste import *
-
+from ReplayBuffer import *
 class Agent:
-    def __init__(self, index, beta_pl, beta_op, Q_net, Q_target, num_actions=4):
+    def __init__(self, index, beta_pl, beta_op, Q_net, Q_target, replay_buffer, num_actions=4, epsilon=epsilon_greedy):
         self.gamma = 0.9
         self.index = index
         self.beta_pl = beta_pl
@@ -17,31 +17,71 @@ class Agent:
         self.optimizer = torch.optim.Adam(self.Q_net.parameters(), lr=0.0005)
         self.loss_function = nn.MSELoss()
         self.learn_step = 0
+        self.epsilon=epsilon
+        self.replay_buffer = replay_buffer
 
     def choose_action(self, observation):
-        if np.random.uniform() < epsilon_greedy:
-            return 1 + np.random.randint(self.num_actions), 1 + np.random.randint(self.num_actions)
-        observation = torch.unsqueeze(torch.tensor(observation, device=device), 0)
-        with torch.no_grad():
-            action_values = self.Q_net.forward(observation).cpu().numpy()[0]
-            return 1 + self._get_player_action(observation, action_values), 1 + self._get_opponent_action(observation,
-                                                                                                          action_values)
+        if np.random.uniform() < self.epsilon:
+            player_action = 1 + np.random.randint(self.num_actions)
+            opponent_action =  1 + np.random.randint(self.num_actions)
+        else:
+            with torch.no_grad():
+                action_values = self.Q_net.forward(observation).cpu().numpy()[0]
+                player_action =  1 + self._get_player_action(observation, action_values)
+                opponent_action = 1 + self._get_opponent_action(observation,action_values)
+
+        action_tensor = torch.unsqueeze(torch.tensor([self._get_combined_index(player_action - 1, opponent_action - 1)],
+                                     dtype=torch.int64, device=device),0)
+
+        return player_action, opponent_action, action_tensor
 
     def update(self, state, reward, actions, new_state):
-        state_tensor = torch.unsqueeze(torch.tensor(state, device=device), 0)
-        new_state = torch.unsqueeze(torch.tensor(new_state, device=device), 0)
-
         self.learn_step += 1
         if self.learn_step % target_update == 0:
             self.Q_target.load_state_dict(self.Q_net.state_dict())
         Q_estimate = reward + self.gamma * self._compute_estimated_value(new_state)
         action_tensor = torch.tensor([[self._get_combined_index(actions[0]-1, actions[1]-1)]], dtype=torch.int64, device=device)
-        Q_current = self.Q_net(state_tensor).gather(1, action_tensor)
+        Q_current = self.Q_net(state).gather(1, action_tensor)
         loss = self.loss_function(Q_current,torch.tensor([[Q_estimate]], device=device))
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
         return loss.cpu().data.numpy()
+
+    def optimize(self):
+        self.learn_step += 1
+        if self.learn_step % target_update == 0:
+            self.Q_target.load_state_dict(self.Q_net.state_dict())
+
+        if len(self.replay_buffer) < batch_size: return 0
+        transitions = self.replay_buffer.sample(batch_size)
+        batch = Transition(*zip(*transitions))
+
+        # compute estimates tensor
+        rewards = batch.reward
+        new_states = batch.next_state
+        Q_estimates = []
+        for i in range(len(rewards)):
+            Q_estimate = rewards[i] + self.gamma * self._compute_estimated_value(new_states[i])
+            Q_estimates.append([Q_estimate])
+        Q_estimates = torch.tensor(Q_estimates, device=device)
+
+        #compute Q value tensor
+        state_batch = torch.cat(batch.state)
+        action_batch = torch.cat(batch.actions)
+        Q_values = self.Q_net(state_batch).gather(1, action_batch)
+
+        #optimize
+        loss = self.loss_function(Q_values,Q_estimates)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        return np.sum(loss.cpu().data.numpy())
+
+
+
+
+
 
     def _compute_estimated_value(self, observation):
         with torch.no_grad():
